@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>hCaptcha AI Solver</title>
+<script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --border: #1e1e2e;
+    --accent: #7c3aed;
+    --accent2: #06b6d4;
+    --text: #e2e8f0;
+    --muted: #4a4a6a;
+    --success: #10b981;
+    --error: #ef4444;
+    --warn: #f59e0b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 20% 20%, rgba(124,58,237,0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 50% at 80% 80%, rgba(6,182,212,0.08) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .card {
+    position: relative;
+    z-index: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 36px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 0 60px rgba(124,58,237,0.1);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+
+  .logo-icon {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+
+  .logo-text {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+
+  .logo-text span {
+    color: var(--accent2);
+  }
+
+  h1 {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    margin-bottom: 8px;
+    line-height: 1.2;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 28px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 24px 0;
+  }
+
+  /* hCaptcha container */
+  .captcha-wrap {
+    display: flex;
+    justify-content: center;
+    margin: 20px 0;
+  }
+
+  /* Solve button */
+  .btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    letter-spacing: 0.3px;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #5b21b6);
+    color: #fff;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(124,58,237,0.4);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    margin-top: 10px;
+    font-size: 13px;
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--accent);
+    color: var(--text);
+  }
+
+  /* Log terminal */
+  .log-box {
+    background: #07070e;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-top: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+  }
+
+  .log-box.active { display: block; }
+
+  .log-line {
+    padding: 2px 0;
+    line-height: 1.6;
+    display: flex;
+    gap: 8px;
+  }
+
+  .log-line .ts { color: var(--muted); flex-shrink: 0; }
+  .log-line.info .msg { color: var(--accent2); }
+  .log-line.ok .msg { color: var(--success); }
+  .log-line.err .msg { color: var(--error); }
+  .log-line.warn .msg { color: var(--warn); }
+
+  /* Status badge */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    margin-bottom: 20px;
+    border: 1px solid transparent;
+  }
+
+  .status-idle { background: rgba(74,74,106,0.2); border-color: var(--muted); color: var(--muted); }
+  .status-solving { background: rgba(124,58,237,0.15); border-color: var(--accent); color: var(--accent); }
+  .status-success { background: rgba(16,185,129,0.15); border-color: var(--success); color: var(--success); }
+  .status-error { background: rgba(239,68,68,0.15); border-color: var(--error); color: var(--error); }
+
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .dot.pulse {
+    animation: pulse 1s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Token output */
+  .token-box {
+    background: #07070e;
+    border: 1px solid var(--success);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-top: 16px;
+    display: none;
+  }
+
+  .token-box.active { display: block; }
+
+  .token-label {
+    font-size: 11px;
+    color: var(--success);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 6px;
+  }
+
+  .token-value {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    word-break: break-all;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon">🤖</div>
+    <div class="logo-text">Ank<span>Solve</span></div>
+  </div>
+
+  <h1>hCaptcha<br>AI Solver</h1>
+  <p class="subtitle">// gemini-2.0-flash vision engine</p>
+
+  <div id="statusBadge" class="status-badge status-idle">
+    <div class="dot"></div>
+    <span id="statusText">Chờ captcha load...</span>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- hCaptcha widget -->
+  <div class="captcha-wrap">
+    <div
+      class="h-captcha"
+      data-sitekey="10000000-ffff-ffff-ffff-000000000001"
+      data-callback="onCaptchaVerify"
+      data-expired-callback="onCaptchaExpired"
+      data-error-callback="onCaptchaError"
+    ></div>
+  </div>
+
+  <button class="btn btn-primary" id="solveBtn" onclick="startSolve()">
+    ⚡ Auto Solve với AI
+  </button>
+
+  <button class="btn btn-secondary" onclick="resetCaptcha()">
+    🔄 Reset captcha
+  </button>
+
+  <!-- Log terminal -->
+  <div class="log-box" id="logBox"></div>
+
+  <!-- Token output -->
+  <div class="token-box" id="tokenBox">
+    <div class="token-label">✅ CAPTCHA TOKEN</div>
+    <div class="token-value" id="tokenValue"></div>
+  </div>
+</div>
+
+<script type="module">
+  import { solveImageChallenge } from './api.js';
+
+  // ─── State ───────────────────────────────────────────────
+  let captchaToken = null;
+  let solving = false;
+
+  // ─── Log helpers ─────────────────────────────────────────
+  const logBox = document.getElementById('logBox');
+
+  function log(msg, type = 'info') {
+    logBox.classList.add('active');
+    const now = new Date().toLocaleTimeString('vi-VN', { hour12: false });
+    const line = document.createElement('div');
+    line.className = `log-line ${type}`;
+    line.innerHTML = `<span class="ts">[${now}]</span><span class="msg">${msg}</span>`;
+    logBox.appendChild(line);
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  function setStatus(text, type = 'idle') {
+    const badge = document.getElementById('statusBadge');
+    const label = document.getElementById('statusText');
+    badge.className = `status-badge status-${type}`;
+    const dot = badge.querySelector('.dot');
+    dot.className = `dot ${type === 'solving' ? 'pulse' : ''}`;
+    label.textContent = text;
+  }
+
+  // ─── hCaptcha callbacks ───────────────────────────────────
+  window.onCaptchaVerify = (token) => {
+    captchaToken = token;
+    setStatus('✅ Đã verify!', 'success');
+    log('hCaptcha token nhận được thành công', 'ok');
+    document.getElementById('tokenBox').classList.add('active');
+    document.getElementById('tokenValue').textContent = token;
+  };
+
+  window.onCaptchaExpired = () => {
+    captchaToken = null;
+    setStatus('Token hết hạn', 'error');
+    log('Token expired — cần solve lại', 'warn');
+  };
+
+  window.onCaptchaError = (err) => {
+    setStatus('Lỗi captcha', 'error');
+    log(`hCaptcha error: ${err}`, 'err');
+  };
+
+  // ─── Auto Solve ───────────────────────────────────────────
+  window.startSolve = async () => {
+    if (solving) return;
+    solving = true;
+
+    const btn = document.getElementById('solveBtn');
+    btn.disabled = true;
+    document.getElementById('tokenBox').classList.remove('active');
+
+    setStatus('Đang giải...', 'solving');
+    log('Bắt đầu auto solve...', 'info');
+
+    try {
+      // Chờ hCaptcha iframe xuất hiện
+      const iframe = await waitForIframe();
+      log('Tìm thấy hCaptcha iframe', 'info');
+
+      // Click vào checkbox để mở challenge
+      const checkboxFrame = iframe.querySelector('iframe[src*="hcaptcha"]');
+      if (checkboxFrame) checkboxFrame.click();
+
+      // Đợi challenge popup
+      await sleep(1500);
+
+      // Tìm challenge frame
+      const challengeResult = await solveChallengeLoop();
+      if (!challengeResult) {
+        throw new Error("Không tìm thấy challenge hoặc solve thất bại");
+      }
+
+      log('Đang submit...', 'info');
+      setStatus('Đang submit...', 'solving');
+
+    } catch (err) {
+      log(`Lỗi: ${err.message}`, 'err');
+      setStatus('Thất bại', 'error');
+    } finally {
+      solving = false;
+      btn.disabled = false;
+    }
+  };
+
+  async function solveChallengeLoop(maxRetry = 3) {
+    for (let i = 0; i < maxRetry; i++) {
+      log(`Lần thử ${i + 1}/${maxRetry}...`, 'info');
+
+      // Tìm tất cả iframe hcaptcha
+      const frames = [...document.querySelectorAll('iframe')].filter(f =>
+        f.src && f.src.includes('hcaptcha') && f.src.includes('challenge')
+      );
+
+      if (!frames.length) {
+        log('Chưa thấy challenge frame, đợi thêm...', 'warn');
+        await sleep(1000);
+        continue;
+      }
+
+      const challengeFrame = frames[0];
+      const doc = challengeFrame.contentDocument;
+      if (!doc) {
+        log('Không truy cập được challenge frame (cross-origin)', 'warn');
+        // Fallback: dùng MutationObserver để bắt DOM từ page chính
+        await solveViaPageDOM();
+        return true;
+      }
+
+      // Lấy task text
+      const taskEl = doc.querySelector('.prompt-text') || doc.querySelector('[class*="prompt"]');
+      const taskText = taskEl?.textContent?.trim() || 'select matching images';
+      log(`Task: "${taskText}"`, 'info');
+
+      // Lấy các ảnh challenge
+      const imgEls = [...doc.querySelectorAll('.task-image img, [class*="task"] img')];
+      if (!imgEls.length) {
+        log('Không thấy ảnh challenge', 'warn');
+        await sleep(1000);
+        continue;
+      }
+
+      log(`Tìm thấy ${imgEls.length} ảnh, đang gửi AI...`, 'info');
+
+      const imgUrls = imgEls.map(img => img.src).filter(Boolean);
+      const selectedIndexes = await solveImageChallenge(taskText, imgUrls);
+
+      log(`AI chọn: [${selectedIndexes.join(', ')}]`, 'ok');
+
+      // Click các ảnh được chọn
+      for (const idx of selectedIndexes) {
+        const tile = doc.querySelectorAll('.task-image, [class*="task-grid"] > *')[idx];
+        if (tile) {
+          tile.click();
+          await sleep(200);
+        }
+      }
+
+      await sleep(500);
+
+      // Click nút verify/submit
+      const submitBtn = doc.querySelector('.button-submit, button[data-cy="submit"]') ||
+                        [...doc.querySelectorAll('button')].find(b => /verify|submit|check/i.test(b.textContent));
+      if (submitBtn) {
+        submitBtn.click();
+        log('Đã click Submit', 'ok');
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Fallback khi không access được iframe (cross-origin)
+  async function solveViaPageDOM() {
+    log('Cross-origin iframe — thử intercept qua hcaptcha JS API...', 'warn');
+    // hCaptcha expose window.hcaptcha nếu dùng API mode
+    // Với test sitekey thì có thể pass tự động
+    if (window.hcaptcha) {
+      log('Dùng hcaptcha JS API execute()', 'info');
+      try {
+        const token = await window.hcaptcha.execute(undefined, { async: true });
+        window.onCaptchaVerify(token);
+      } catch (e) {
+        log(`execute() failed: ${e.message}`, 'err');
+      }
+    }
+  }
+
+  async function waitForIframe(timeout = 10000) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      const frame = document.querySelector('iframe[src*="hcaptcha"]');
+      if (frame) return frame.parentElement;
+      await sleep(300);
+    }
+    throw new Error('hCaptcha iframe không load');
+  }
+
+  function sleep(ms) {
+    return new Promise(r => setTimeout(r, ms));
+  }
+
+  window.resetCaptcha = () => {
+    if (window.hcaptcha) window.hcaptcha.reset();
+    captchaToken = null;
+    setStatus('Chờ captcha load...', 'idle');
+    logBox.innerHTML = '';
+    logBox.classList.remove('active');
+    document.getElementById('tokenBox').classList.remove('active');
+    log('Reset xong', 'info');
+  };
+
+  // Init
+  window.addEventListener('load', () => {
+    setStatus('Captcha đã load', 'idle');
+    log('AnkSolve khởi động — sitekey: test mode', 'ok');
+  });
+</script>
+</body>
+</html>
